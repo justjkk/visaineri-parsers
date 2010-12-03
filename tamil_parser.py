@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from pyparsing import Word, Literal, ParseException, Combine, OneOrMore, Group, StringEnd, White, NotAny, Suppress, FollowedBy, Optional
+from pyparsing import Word, Literal, ParseException, Combine, OneOrMore, Group, StringEnd, White, NotAny, Suppress, FollowedBy, Optional, ZeroOrMore
 
 ''' why swap_agaram?
 '' Because the unicode defines codepoints for vowels ( separate as well as
@@ -30,6 +30,8 @@ virama = u"்" # புள்ளி
 
 mei = u"கஙசஞடணதநபமயரலவழளறன" # மெய்யெழுத்து (புள்ளி இல்லாமல் மெய்யாய் கொள்ளப்பட்டுள்ளது)
 
+vallina_mei = u"கசடதபற"
+
 aaytham = u"ஃ"
 
 space = White() | StringEnd()
@@ -47,7 +49,8 @@ def swap_agaram(strg):
    return swapped_strg
 
 def token_swap_agaram(tokens):
-    return [swap_agaram(tokens[0])]
+   for t in tokens:
+      t[0] = swap_agaram(t[0])
 
 ### எழுத்து ###
 # உயிரெழுத்து
@@ -57,6 +60,7 @@ thani_uyir_ezhuttu = Word(uyir, exact=1) # தனி உயிரெழுத்
 combining_uyir_ezhuttu = Word(combining_uyir, exact=1) # புணரும் உயிரெழுத்து
 # மெய்யெழுத்து
 mei_ezhuttu = Word(mei, exact=1)
+vallina_mei_ezhuttu = Word(vallina_mei, exact=1)
 # ஆயுதம்
 aaytha_ezhuttu = Word(aaytham, exact=1)
 # உயிர்மெய் எழுத்து
@@ -70,7 +74,7 @@ thani_kuril_ezhuttu = kuril_uyir_mei_ezhuttu | thani_kuril_uyir_ezhuttu # தன
 thani_nedil_ezhuttu = nedil_uyir_mei_ezhuttu | thani_nedil_uyir_ezhuttu # தனிநெடில்
 kuril_otru = Combine(thani_kuril_ezhuttu + OneOrMore(mei_ezhuttu + NotAny(combining_uyir_ezhuttu))) # குறிலொற்று
 nedil_otru = Combine(thani_nedil_ezhuttu + OneOrMore(mei_ezhuttu + NotAny(combining_uyir_ezhuttu))) # நெடிலொற்று
-ner_asai = (nedil_otru | kuril_otru | thani_nedil_ezhuttu | (thani_kuril_ezhuttu + FollowedBy(space)))(u"நேரசை")
+ner_asai = Group((nedil_otru | kuril_otru | thani_nedil_ezhuttu | (thani_kuril_ezhuttu + FollowedBy(space))) + ZeroOrMore('#'))(u"நேரசை") # hack: ZeroOrMore forces asai to become a pyparsing.Group rather than just a string
 ner_asai.setParseAction(token_swap_agaram)
 
 # நிரையசை
@@ -78,9 +82,9 @@ kuril_inai = Combine(thani_kuril_ezhuttu + thani_kuril_ezhuttu) # குறி�
 kuril_nedil = Combine(thani_kuril_ezhuttu + thani_nedil_ezhuttu) # குறில் நெடில்
 kuril_inai_otru = Combine(kuril_inai + OneOrMore(mei_ezhuttu + NotAny(combining_uyir_ezhuttu))) # குறிலினை ஒற்று
 kuril_nedil_otru = Combine(kuril_nedil + OneOrMore(mei_ezhuttu + NotAny(combining_uyir_ezhuttu))) # குறில் நெடில் ஒற்று
-nirai_asai = (kuril_nedil_otru | kuril_inai_otru | kuril_nedil | kuril_inai)(u"நிரையசை")
+nirai_asai = Group((kuril_nedil_otru | kuril_inai_otru | kuril_nedil | kuril_inai) + ZeroOrMore('#'))(u"நிரையசை") # hack: ZeroOrMore forces asai to become a pyparsing.Group rather than just a string
 nirai_asai.setParseAction(token_swap_agaram)
-asai = (nirai_asai | ner_asai)(u"அசை")
+#asai = (nirai_asai | ner_asai)(u"அசை")
 
 ### சீர் ###
 ## ஈரசைச்சீர்
@@ -137,9 +141,9 @@ puli_maa_than_poo | koo_vilam_narum_nizhal | koo_vilam_narum_poo | koo_vilam_tha
 ## ஈற்றுச்சீர்
 naal = Group(ner_asai + StringEnd())(u"நாள்")
 malar = Group(nirai_asai + StringEnd())(u"மலர்")
-ugara_mei = Combine(mei_ezhuttu + Word(u"ு", exact=1))(u"உகரமெய்")
-kaasu = Group(ner_asai + ugara_mei + StringEnd())(u"காசு")
-pirappu = Group(nirai_asai + ugara_mei + StringEnd())(u"பிறப்பு")
+vallina_ugaram = Group(Combine(vallina_mei_ezhuttu + Word(u"ு", exact=1)) + ZeroOrMore('#'))(u"வல்லின உகரம்")
+kaasu = Group(ner_asai + vallina_ugaram + StringEnd())(u"காசு")
+pirappu = Group(nirai_asai + vallina_ugaram + StringEnd())(u"பிறப்பு")
 eetru_cheer = (pirappu | kaasu | malar | naal)#(u"ஈற்றுச்சீர்")
 
 cheer = ((eetru_cheer | eerasai_cheer | moovasai_cheer | naalasai_cheer ) + Optional(Suppress(".,!-_?")))#(u"சீர்")
@@ -147,14 +151,38 @@ cheer = ((eetru_cheer | eerasai_cheer | moovasai_cheer | naalasai_cheer ) + Opti
 # அடி
 adi = Group(OneOrMore(cheer + Suppress(Optional(White(" \t")))) + Suppress(Optional(White("\n"))))(u"அடி")
 
+def generateXML(parse_results):
+   from xml.dom.minidom import getDOMImplementation
+   impl = getDOMImplementation()
+   doc = impl.createDocument(None, u"பா", None)
+   top_element = doc.documentElement
+   for adi in parse_results:
+      n_adi = doc.createElement(u"அடி")
+      for cheer in adi:
+         n_cheer = doc.createElement(u"சீர்")
+         for asai in cheer:
+            n_asai = doc.createElement(u"அசை")
+            a_asai_type = doc.createAttribute(u"வகை")
+            a_asai_type.value = asai.getName()
+            n_asai.setAttributeNode(a_asai_type)
+            a_porul = doc.createAttribute(u"பொருள்")
+            a_porul.value = ''.join(asai)
+            n_asai.setAttributeNode(a_porul)
+            n_cheer.appendChild(n_asai)
+         a_cheer_type = doc.createAttribute(u"வகை")
+         a_cheer_type.value = cheer.getName()
+         n_cheer.setAttributeNode(a_cheer_type)
+         n_adi.appendChild(n_cheer)
+      top_element.appendChild(n_adi)
+   return top_element.toprettyxml(encoding='utf-8')
+
 def analyzeVerse(instr):
    swp = swap_agaram(unicode(instr))
    parse_syntax = OneOrMore(adi).leaveWhitespace()
    try:
       result = parse_syntax.parseString(swp, parseAll=True)
-      xml_output = result.asXML(u"பா", namedItemsOnly=False)
-      return u"<?xml lang=\"ta\" encoding=\"utf-8\" ?>" + xml_output
-   except Exception:
+      return generateXML(result)
+   except Exception,e:
       return None
 
 if __name__ == "__main__":
@@ -162,6 +190,9 @@ if __name__ == "__main__":
           u"காடுடைய சுடலைப் பொடிபூசியென் னுள்ளங் கவர்கள்வன்\n" + \
           u"ஏடுடைய மலரான் முனைநாட்பணிந் தேத்த வருள்செய்த\n" + \
           u"பீடுடைய பிரமா புரமேவிய பெம்மா னிவனன்றே"
+   str2 = u"அகர முதல எழுத்தெல்லாம் ஆதி\n" + \
+          u"பகவன் முதற்றே உலகு"
+   print analyzeVerse(str1)
    import codecs
    with codecs.open("sample.xml","w","utf-8") as f:
-      f.write(analyzeVerse(str1))
+      f.write(codecs.decode(analyzeVerse(str2),"utf-8"))
