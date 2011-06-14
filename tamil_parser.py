@@ -1,19 +1,6 @@
 # -*- coding: utf-8 -*-
 from pyparsing import Word, Literal, ParseException, Combine, OneOrMore, Group, StringEnd, White, NotAny, Suppress, FollowedBy, Optional, ZeroOrMore
 
-''' why swap_agaram?
-'' Because the unicode defines codepoints for vowels ( separate as well as
-'' combined ) and consonants ( defaulted with the vowel அ ). This complicates
-'' the parsing process as we deal with உயிர் எழுத்துக்கள் and மெய் எழுத்துக்கள். So,
-'' using this function will replace \u0b95(க) with \u0b95(க)\u0bcd(்)=க் and
-'' \u0b95\u0bcd(க்) with \u0b95(க). Then, the codepoint of virama is borrowed
-'' as the codepoint of combined அ and the codepoint of consonant is treated
-'' as the codepoint of the மெய் எழுத்து.
-'' Eg: Input = கல்வி ( \u0b95\u0bb2\u0bcd\u0bb5\u0bbf )
-''     Output = க்லவி ( \u0b95\u0bcd\u0bb2\u0bb5\u0bbf )
-'' This function is self-inverse ie., swap_agaram(swap_agaram(text)) == text
-'''
-
 uyir_kuril = u"அஇஉஎஒ" # உயிர்குறில்
 
 uyir_nedil = u"ஆஈஊஏஐஓஔ" # உயிர்நெடில்
@@ -36,6 +23,24 @@ aaytham = u"ஃ"
 
 space = White() | StringEnd()
 
+"""
+Rationale:
+    Because the unicode defines codepoints for vowels ( separate as well as
+combined ) and consonants ( defaulted with the vowel அ ). This complicates
+the parsing process as we deal with உயிர் எழுத்துக்கள் and மெய் எழுத்துக்கள். So,
+using this function will replace \u0b95(க) with \u0b95(க)\u0bcd(்)=க் and
+\u0b95\u0bcd(க்) with \u0b95(க). Then, the codepoint of virama is borrowed
+as the codepoint of combined அ and the codepoint of consonant is treated
+as the codepoint of the மெய் எழுத்து.
+
+>>>swap_agaram(u"கல்வி")
+க்லவி
+
+This function is self-inverse.
+>>>swap_agaram(swap_agaram(u"கல்வி"))
+கல்வி
+
+"""
 def swap_agaram(strg):
    def process_form1(tokens):
       return [tokens[0][0] + virama]
